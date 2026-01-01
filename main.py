@@ -23,6 +23,16 @@ except:
 
 
 LUCKY_NUMBERS = [0, 1, 2, 3, 5, 6, 7, 8, 9]
+FESTIVE_MIN_LUCK = 70
+FESTIVE_DATES = {
+    "2024-02-10",
+    "2025-01-29",
+    "2026-02-17",
+    "2027-02-06",
+    "2028-01-26",
+    "2029-02-13",
+    "2030-02-03"
+}
 
 
 @register("astrbot_plugin_fortnue", "Xbodw", "今日运势生成器 - 输入「今日运势」获取专属运势图", "1.16.0")
@@ -308,21 +318,31 @@ class FortunePlugin(Star):
             "hex": hex_color,
             "rgb": [r, g, b]
         }
+    
+    def _is_festive_day(self, dt: datetime) -> bool:
+        s = dt.strftime("%Y-%m-%d")
+        if dt.month == 1 and dt.day == 1:
+            return True
+        if s in FESTIVE_DATES:
+            return True
+        return False
         
     def _get_fortune_for_user(self, user_id: str) -> dict:
-        """根据用户ID和日期获取或生成运势（同一天运势固定）"""
-        today_str = datetime.now().strftime("%Y-%m-%d")
+        today_dt = datetime.now()
+        today_str = today_dt.strftime("%Y-%m-%d")
         
-        # 检查是否已有当天运势数据
         if user_id in self.user_fortune_data:
             user_data = self.user_fortune_data[user_id]
             if user_data.get("date") == today_str:
-                return user_data["fortune_data"]
+                if self._is_festive_day(today_dt):
+                    fd = user_data["fortune_data"]
+                    if fd.get("luck_value", 0) >= FESTIVE_MIN_LUCK:
+                        return fd
+                else:
+                    return user_data["fortune_data"]
         
-        # 加载运势数据
         fortune_data = self._load_fortune_data()
         if not fortune_data:
-            # 如果加载失败，使用默认数据
             return {
                 "fortune": {
                     "level": "中吉", 
@@ -335,22 +355,20 @@ class FortunePlugin(Star):
                 "luck_value": 70
             }
         
-        # 生成新的运势数据
         seed = f"{user_id}-{today_str}"
         rng = random.Random(seed)
         
-        # 从fortune_data.json中随机选择一个运势等级
         luck_levels = list(fortune_data.keys())
+        if self._is_festive_day(today_dt):
+            luck_levels = [lvl for lvl in luck_levels if int(lvl) >= FESTIVE_MIN_LUCK] or luck_levels
         selected_level = rng.choice(luck_levels)
         level_data = fortune_data[selected_level]
         fortune = rng.choice(level_data)
         
-        # 获取幸运色和数字
         lucky_color = self._get_random_hex_color()
         lucky_number = rng.choice(LUCKY_NUMBERS)
         advice = fortune.get('advice', '今天适合：保持好心情')
         
-        # 准备返回的运势数据
         result_data = {
             "fortune": {
                 "level": fortune["level"],
@@ -363,7 +381,6 @@ class FortunePlugin(Star):
             "luck_value": int(selected_level)  # 使用选择的等级作为幸运值
         }
         
-        # 存储到文件
         self.user_fortune_data[user_id] = {
             "date": today_str,
             "fortune_data": result_data
