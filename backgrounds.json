@@ -765,5 +765,17 @@
         "headers": {
             "Accept": "application/json"
         }
+    },
+    "sretna_pe": {
+        "type": "api",
+        "url": "https://api.sretna.cn/api/pe.php",
+        "method": "get",
+        "expected": "image"
+    },
+    "mwm-moe": {
+        "type": "api",
+        "url": "https://t.mwm.moe/mp",
+        "method": "get",
+        "expected": "image"
     }
 }
