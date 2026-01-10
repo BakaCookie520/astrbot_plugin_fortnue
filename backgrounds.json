@@ -749,5 +749,21 @@
         "https://i0.hdslb.com/bfs/article/cfb84c27ce0612d43b9439139abb1ae20acf144e.jpg",
         "https://i0.hdslb.com/bfs/article/bf914c11c087b36f33f43261b143349cfb83835d.jpg",
         "https://i0.hdslb.com/bfs/article/2332c7f9d946f2dcceac446165c67e2c7298dcef.jpg"
-    ]
+    ],
+    "alcy_mp": {
+        "type": "api",
+        "url": "https://t.alcy.cc/mp",
+        "method": "get",
+        "expected": "image"
+    },
+    "sexphoto": {
+        "type": "api",
+        "url": "https://sex.nyan.run/api/v2/",
+        "method": "get",
+        "expected": "url",
+        "token": "data.url",
+        "headers": {
+            "Accept": "application/json"
+        }
+    }
 }

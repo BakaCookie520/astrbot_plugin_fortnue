@@ -35,7 +35,7 @@ FESTIVE_DATES = {
 }
 
 
-@register("astrbot_plugin_fortnue", "Xbodw", "今日运势生成器 - 输入「今日运势」获取专属运势图", "1.16.0")
+@register("astrbot_plugin_fortnue", "Xbodw", "今日运势生成器 - 生成一张二次元风格的运势图片", "1.17.0")
 class FortunePlugin(Star):
     """今日运势插件 - 生成精美的运势图片"""
     
@@ -75,17 +75,104 @@ class FortunePlugin(Star):
         except Exception as e:
             logger.error(f"保存运势数据失败: {e}")
     
-    def _get_random_background_url(self) -> str:
-        """随机获取一个背景图片URL"""
+    def _get_random_background_url(self) -> str | dict:
         if not self.backgrounds_data:
             return ""
-        all_urls = []
-        for category, urls in self.backgrounds_data.items():
-            if isinstance(urls, list):
-                all_urls.extend(urls)
-        if not all_urls:
+        source_keys = []
+        for k, v in self.backgrounds_data.items():
+            if isinstance(v, list) and len(v) > 0:
+                source_keys.append(k)
+            elif isinstance(v, str) and v:
+                source_keys.append(k)
+            elif isinstance(v, dict) and v.get("type"):
+                t = v.get("type")
+                if t == "array":
+                    items = v.get("items") or v.get("urls") or []
+                    if isinstance(items, list) and len(items) > 0:
+                        source_keys.append(k)
+                elif t == "api":
+                    if isinstance(v.get("url"), str) and v.get("url"):
+                        source_keys.append(k)
+        if not source_keys:
             return ""
-        return random.choice(all_urls)
+        chosen_key = random.choice(source_keys)
+        chosen = self.backgrounds_data.get(chosen_key)
+        if isinstance(chosen, list) and len(chosen) > 0:
+            return random.choice(chosen)
+        if isinstance(chosen, str) and chosen:
+            return chosen
+        if isinstance(chosen, dict):
+            t = chosen.get("type")
+            if t == "array":
+                items = chosen.get("items") or chosen.get("urls") or []
+                if isinstance(items, list) and len(items) > 0:
+                    return random.choice(items)
+            if t == "api":
+                return chosen
+        for k, v in self.backgrounds_data.items():
+            if isinstance(v, list) and len(v) > 0:
+                return random.choice(v)
+            if isinstance(v, str) and v:
+                return v
+            if isinstance(v, dict):
+                t = v.get("type")
+                if t == "array":
+                    items = v.get("items") or v.get("urls") or []
+                    if isinstance(items, list) and len(items) > 0:
+                        return random.choice(items)
+                if t == "api":
+                    if isinstance(v.get("url"), str) and v.get("url"):
+                        return v
+        return ""
+    
+    def _extract_token_value(self, obj, token: str):
+        if not isinstance(token, str) or not token:
+            return obj
+        parts = [p for p in token.split(".") if p]
+        cur = obj
+        for p in parts:
+            if isinstance(cur, list):
+                if len(cur) == 0:
+                    return None
+                cur = random.choice(cur)
+            if isinstance(cur, dict):
+                if p in cur:
+                    cur = cur[p]
+                else:
+                    return None
+            else:
+                return None
+        return cur
+    
+    async def _resolve_api_image_url(self, spec: dict, timeout: int = 15):
+        url = spec.get("url")
+        method = str(spec.get("method", "get")).lower()
+        expected = str(spec.get("expected", "url")).lower()
+        headers = spec.get("headers") or {}
+        base_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        req_headers = {**base_headers, **headers} if isinstance(headers, dict) else base_headers
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.request(method.upper(), url, timeout=aiohttp.ClientTimeout(total=timeout), headers=req_headers) as resp:
+                    if resp.status != 200:
+                        return ""
+                    if expected == "image":
+                        data = await resp.read()
+                        return Image.open(BytesIO(data))
+                    js = await resp.json()
+                    token = spec.get("token") or ""
+                    if isinstance(js, dict) and token:
+                        val = self._extract_token_value(js, token)
+                        if isinstance(val, str):
+                            return val
+                        if isinstance(val, list) and len(val) > 0 and isinstance(val[0], str):
+                            return random.choice(val)
+                    return url
+        except Exception as e:
+            logger.error(f"解析API图片失败 {url}: {e}")
+            return ""
     
     async def _download_image(self, url: str, timeout: int = 15) -> Image.Image | None:
         """异步下载图片"""
@@ -545,13 +632,26 @@ class FortunePlugin(Star):
         user_name = event.get_sender_name()
         
         try:
-            bg_url = self._get_random_background_url()
-            logger.info(f"选取背景图片URL: {bg_url}")
-            if not bg_url:
-                yield event.plain_result("背景图片加载失败，请稍后再试~")
-                return
-            
-            background = await self._download_image(bg_url)
+            bg_spec = self._get_random_background_url()
+            if isinstance(bg_spec, dict):
+                resolved = await self._resolve_api_image_url(bg_spec)
+                if isinstance(resolved, Image.Image):
+                    background = resolved
+                    bg_url = "(api-image)"
+                else:
+                    bg_url = resolved
+                    logger.info(f"选取背景图片URL: {bg_url}")
+                    if not bg_url:
+                        yield event.plain_result("背景图片加载失败，请稍后再试~")
+                        return
+                    background = await self._download_image(bg_url)
+            else:
+                bg_url = bg_spec
+                logger.info(f"选取背景图片URL: {bg_url}")
+                if not bg_url:
+                    yield event.plain_result("背景图片加载失败，请稍后再试~")
+                    return
+                background = await self._download_image(bg_url)
             if not background:
                 yield event.plain_result("背景图片下载失败，请稍后再试~")
                 return
