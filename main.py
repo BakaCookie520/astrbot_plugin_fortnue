@@ -17,25 +17,20 @@ try:
 except:
     get_color_from_rgb = None
 try:
+    from zhdate import ZhDate
+except ImportError:
+    ZhDate = None
+try:
     import webcolors
-except:
+except ImportError:
     webcolors = None
 
 
 LUCKY_NUMBERS = [0, 1, 2, 3, 5, 6, 7, 8, 9]
 FESTIVE_MIN_LUCK = 70
-FESTIVE_DATES = {
-    "2024-02-10",
-    "2025-01-29",
-    "2026-02-17",
-    "2027-02-06",
-    "2028-01-26",
-    "2029-02-13",
-    "2030-02-03"
-}
 
 
-@register("astrbot_plugin_fortnue", "Xbodw", "今日运势生成器 - 生成一张二次元风格的运势图片", "1.17.0")
+@register("astrbot_plugin_fortnue", "Xbodw", "今日运势生成器 - 生成一张二次元风格的运势图片", "1.18.0")
 class FortunePlugin(Star):
     """今日运势插件 - 生成精美的运势图片"""
     
@@ -407,11 +402,30 @@ class FortunePlugin(Star):
         }
     
     def _is_festive_day(self, dt: datetime) -> bool:
-        s = dt.strftime("%Y-%m-%d")
+        """判断是否为重大节假日 (元旦、春节、元宵、端午、中秋等)"""
+        # 1. 元旦 (公历 1月1日)
         if dt.month == 1 and dt.day == 1:
             return True
-        if s in FESTIVE_DATES:
-            return True
+        
+        # 2. 农历节日 (使用 zhdate 计算)
+        if ZhDate:
+            try:
+                lunar = ZhDate.from_datetime(dt)
+                # 春节 (正月初一)
+                if lunar.l_month == 1 and lunar.l_day == 1:
+                    return True
+                # 元宵节 (正月十五)
+                if lunar.l_month == 1 and lunar.l_day == 15:
+                    return True
+                # 端午节 (五月初五)
+                if lunar.l_month == 5 and lunar.l_day == 5:
+                    return True
+                # 中秋节 (八月十五)
+                if lunar.l_month == 8 and lunar.l_day == 15:
+                    return True
+            except Exception:
+                pass
+                
         return False
         
     def _get_fortune_for_user(self, user_id: str) -> dict:
